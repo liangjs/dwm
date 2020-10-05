@@ -438,10 +438,13 @@ buttonpress(XEvent *e)
 	Monitor *m;
 	XButtonPressedEvent *ev = &e->xbutton;
 	WinTitle *wt;
+	int focus_click;
+
+	focus_click = focusonwheel || (ev->button != Button4 && ev->button != Button5);
 
 	click = ClkRootWin;
 	/* focus monitor if necessary */
-	if ((m = wintomon(ev->window)) && m != selmon) {
+	if ((m = wintomon(ev->window)) && m != selmon && focus_click) {
 		unfocus(selmon->sel, 1);
 		selmon = m;
 		focus(NULL);
@@ -478,8 +481,10 @@ buttonpress(XEvent *e)
 			}
 		}
 	} else if ((c = wintoclient(ev->window))) {
-		focus(c);
-		restack(selmon);
+		if (focus_click) {
+			focus(c);
+			restack(selmon);
+		}
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
@@ -817,20 +822,15 @@ drawbars(void)
 void
 enternotify(XEvent *e)
 {
-	Client *c;
-	Monitor *m;
-	XCrossingEvent *ev = &e->xcrossing;
+	//Client *c;
+	//Monitor *m;
+	//XCrossingEvent *ev = &e->xcrossing;
 
-	if ((ev->mode != NotifyNormal || ev->detail == NotifyInferior) && ev->window != root)
-		return;
-	c = wintoclient(ev->window);
-	m = c ? c->mon : wintomon(ev->window);
-	if (m != selmon) {
-		unfocus(selmon->sel, 1);
-		selmon = m;
-	} else if (!c || c == selmon->sel)
-		return;
-	focus(c);
+	//if ((ev->mode != NotifyNormal || ev->detail == NotifyInferior) && ev->window != root)
+	//	return;
+	//c = wintoclient(ev->window);
+	//m = c ? c->mon : wintomon(ev->window);
+	return;
 }
 
 void
