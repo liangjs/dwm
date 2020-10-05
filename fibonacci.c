@@ -1,11 +1,13 @@
 void
 fibonacci(Monitor *mon, int s) {
-	unsigned int i, n, nx, ny, nw, nh;
+	unsigned int i, n, nx, ny, nw, nh, bw;
 	Client *c;
 
 	for(n = 0, c = nexttiled(mon->clients); c; c = nexttiled(c->next), n++);
 	if(n == 0)
 		return;
+
+	bw = n == 1 ? 0 : borderpx;
 	
 	nx = mon->wx;
 	ny = 0;
@@ -51,7 +53,7 @@ fibonacci(Monitor *mon, int s) {
 				nw = mon->ww - nw;
 			i++;
 		}
-		resize(c, nx, ny, nw - 2 * c->bw, nh - 2 * c->bw, False);
+		resize(c, nx, ny, nw - 2 * bw, nh - 2 * bw, bw, 0);
 	}
 }
 
