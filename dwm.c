@@ -142,6 +142,13 @@ typedef struct {
 	int monitor;
 } Rule;
 
+typedef struct WinTitle WinTitle;
+struct WinTitle{
+	unsigned int xbegin, xend;
+	Client *client;
+	WinTitle *next;
+};
+
 /* function declarations */
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -186,6 +193,7 @@ static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
+static void nothing(const Arg *arg);
 static void pop(Client *);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
@@ -231,6 +239,8 @@ static void updatetitle(Client *c);
 static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
+static void wintitle_append(WinTitle **wintitle, Client *c, unsigned int xb, unsigned int xe);
+static void wintitle_free(WinTitle **wintitle);
 static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
@@ -245,6 +255,7 @@ static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh, blw = 0;      /* bar geometry */
 static int lrpad;            /* sum of left and right padding for text */
+static int title_gap;        /* gap between titles in bar */
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static unsigned int numlockmask = 0;
 static void (*handler[LASTEvent]) (XEvent *) = {
@@ -271,6 +282,7 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
+static WinTitle *wintitle;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -425,6 +437,7 @@ buttonpress(XEvent *e)
 	Client *c;
 	Monitor *m;
 	XButtonPressedEvent *ev = &e->xbutton;
+	WinTitle *wt;
 
 	click = ClkRootWin;
 	/* focus monitor if necessary */
@@ -436,25 +449,33 @@ buttonpress(XEvent *e)
 	if (ev->window == selmon->barwin) {
 		i = x = 0;
 		for (c = m->clients; c; c = c->next)
-			occ |= c->tags == 255 ? 0 : c->tags;
+			occ |= c->tags == TAGMASK ? 0 : c->tags;
 		x += blw;
-		if (ev->x < x)
+		if (ev->x < x) {
 			click = ClkLtSymbol;
-		else {
-			do {
-				/* do not reserve space for vacant tags */
-				if (!(occ & 1 << i || m->tagset[m->seltags] & 1 << i))
-					continue;
-				x += TEXTW(tags[i]);
-			} while (ev->x >= x && ++i < LENGTH(tags));
-			if (i < LENGTH(tags)) {
-				click = ClkTagBar;
-				arg.ui = 1 << i;
-			}
-			else if (ev->x > selmon->ww - (int)TEXTW(stext))
-				click = ClkStatusText;
-			else
+			goto click_type_done;
+		}
+		do {
+			/* do not reserve space for vacant tags */
+			if (!(occ & 1 << i || m->tagset[m->seltags] & 1 << i))
+				continue;
+			x += TEXTW(tags[i]);
+		} while (ev->x >= x && ++i < LENGTH(tags));
+		if (i < LENGTH(tags)) {
+			click = ClkTagBar;
+			arg.ui = 1 << i;
+			goto click_type_done;
+		}
+		if (ev->x > selmon->ww - (int)TEXTW(stext)) {
+			click = ClkStatusText;
+			goto click_type_done;
+		}
+		for (wt = wintitle; wt; wt = wt->next) {
+			if (ev->x >= wt->xbegin && ev->x < wt->xend) {
 				click = ClkWinTitle;
+				focus(wt->client);
+				goto click_type_done;
+			}
 		}
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
@@ -462,6 +483,7 @@ buttonpress(XEvent *e)
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
+click_type_done:
 	for (i = 0; i < LENGTH(buttons); i++)
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
@@ -724,7 +746,7 @@ drawbar(Monitor *m)
 	for (c = m->clients; c; c = c->next) {
 		if (ISVISIBLE(c))
 			++n;
-		occ |= c->tags == 255 ? 0 : c->tags;
+		occ |= c->tags == TAGMASK ? 0 : c->tags;
 		if (c->isurgent)
 			urg |= c->tags;
 	}
@@ -735,7 +757,7 @@ drawbar(Monitor *m)
 	for (i = 0; i < LENGTH(tags); i++) {
 		/* do not draw vacant tags */
 		if (!(occ & 1 << i || m->tagset[m->seltags] & 1 << i))
-		continue;
+			continue;
 
 		w = TEXTW(tags[i]);
 		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeTagsSel : SchemeTagsNorm]);
@@ -743,7 +765,13 @@ drawbar(Monitor *m)
 		x += w;
 	}
 
-	if ((w = m->ww - sw - x) > bh) {
+	wintitle_free(&wintitle);
+
+	if ((w = m->ww - sw - x - title_gap) > bh) {
+		drw_setscheme(drw, scheme[SchemeInfoNorm]);
+		drw_rect(drw, x, 0, title_gap / 2, bh, 1, 1);
+		x += title_gap / 2;
+
 		if (n > 0) {
 			ew = TEXTW(m->sel->name) + lrpad;
 			ew = MIN(ew, w / 2);
@@ -761,10 +789,16 @@ drawbar(Monitor *m)
 				if (tw > 0) /* trap special handling of 0 in drw_text */
 					drw_text(drw, x, 0, tw, bh, lrpad / 2, c->name, 0);
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, !c->isfloating, 0);
+				wintitle_append(&wintitle, c, x, x + tw);
 				x += tw;
 				w -= tw;
 			}
 		}
+
+		drw_setscheme(drw, scheme[SchemeInfoNorm]);
+		drw_rect(drw, x, 0, title_gap / 2, bh, 1, 1);
+		x += title_gap / 2;
+
 		drw_setscheme(drw, scheme[SchemeInfoNorm]);
 		drw_rect(drw, x, 0, w, bh, 1, 1);
 	}
@@ -1229,6 +1263,10 @@ nexttiled(Client *c)
 	return c;
 }
 
+void nothing(const Arg *arg)
+{
+}
+
 void
 pop(Client *c)
 {
@@ -1592,6 +1630,7 @@ setup(void)
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
+	title_gap = drw->fonts->h;
 	bh = drw->fonts->h + 2;
 	updategeom();
 	/* init atoms */
@@ -2104,6 +2143,26 @@ view(const Arg *arg)
 		selmon->tagset[selmon->seltags] = arg->ui & TAGMASK;
 	focus(NULL);
 	arrange(selmon);
+}
+
+void wintitle_append(WinTitle **wintitle, Client *c, unsigned int xb, unsigned int xe)
+{
+	WinTitle *wt;
+	wt = ecalloc(1, sizeof(WinTitle));
+	wt->client = c;
+	wt->xbegin = xb;
+	wt->xend = xe;
+	wt->next = *wintitle;
+	*wintitle = wt;
+}
+
+void wintitle_free(WinTitle **wintitle)
+{
+	WinTitle *wt;
+	while ((wt = *wintitle) != NULL) {
+		*wintitle = wt->next;
+		free(wt);
+	}
 }
 
 Client *
