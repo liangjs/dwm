@@ -53,7 +53,7 @@ fibonacci(Monitor *mon, int s) {
 				nw = mon->ww - nw;
 			i++;
 		}
-		resize(c, nx, ny, nw - 2 * bw, nh - 2 * bw, bw, 0);
+		resize(c, nx + mon->gappx, ny + mon->gappx, nw - 2 * bw - mon->gappx, nh - 2 * bw - mon->gappx, bw, 0);
 	}
 }
 
