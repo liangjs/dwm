@@ -9,10 +9,10 @@ fibonacci(Monitor *mon, int s) {
 
 	bw = n == 1 ? 0 : borderpx;
 	
-	nx = mon->wx;
-	ny = 0;
-	nw = mon->ww;
-	nh = mon->wh;
+	nx = mon->wx + mon->gappx;
+	ny = mon->gappx;
+	nw = mon->ww - mon->gappx;
+	nh = mon->wh - mon->gappx;
 	
 	for(i = 0, c = nexttiled(mon->clients); c; c = nexttiled(c->next)) {
 		if((i % 2 && nh / 2 > 2 * c->bw)
@@ -46,14 +46,14 @@ fibonacci(Monitor *mon, int s) {
 			if(i == 0)
 			{
 				if(n != 1)
-					nw = mon->ww * mon->mfact;
+					nw = mon->ww * mon->mfact - mon->gappx;
 				ny = mon->wy;
 			}
 			else if(i == 1)
-				nw = mon->ww - nw;
+				nw = mon->ww - nw - mon->gappx;
 			i++;
 		}
-		resize(c, nx + mon->gappx, ny + mon->gappx, nw - 2 * bw - mon->gappx, nh - 2 * bw - mon->gappx, bw, 0);
+		resize(c, nx, ny + mon->gappx, nw - 2 * bw - mon->gappx, nh - 2 * bw - mon->gappx, bw, 0);
 	}
 }
 
