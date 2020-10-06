@@ -227,6 +227,7 @@ static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
 static void incnmaster(const Arg *arg);
+static int iscolor(const char *buf);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void layoutmenu(const Arg *arg);
@@ -1011,13 +1012,15 @@ drawstatusbar(Monitor *m, int bh, char* stext) {
 					char buf[8];
 					memcpy(buf, (char*)text+i+1, 7);
 					buf[7] = '\0';
-					drw_clr_create(drw, &drw->scheme[ColFg], buf);
+					if (iscolor(buf))
+						drw_clr_create(drw, &drw->scheme[ColFg], buf);
 					i += 7;
 				} else if (text[i] == 'b') {
 					char buf[8];
 					memcpy(buf, (char*)text+i+1, 7);
 					buf[7] = '\0';
-					drw_clr_create(drw, &drw->scheme[ColBg], buf);
+					if (iscolor(buf))
+						drw_clr_create(drw, &drw->scheme[ColBg], buf);
 					i += 7;
 				} else if (text[i] == 'd') {
 					drw->scheme[ColFg] = scheme[SchemeStatus][ColFg];
@@ -1391,6 +1394,23 @@ incnmaster(const Arg *arg)
 {
 	selmon->nmaster = selmon->pertag->nmasters[selmon->pertag->curtag] = MAX(selmon->nmaster + arg->i, 0);
 	arrange(selmon);
+}
+
+int iscolor(const char *buf)
+{
+	int i;
+	if (buf[0] != '#')
+		return 0;
+	for (i = 1; i <= 6; ++i) {
+		if (buf[i] >= '0' && buf[i] <= '9')
+			continue;
+		if (buf[i] >= 'a' && buf[i] <= 'f')
+			continue;
+		if (buf[i] >= 'A' && buf[i] <= 'F')
+			continue;
+		return 0;
+	}
+	return 1;
 }
 
 #ifdef XINERAMA
