@@ -1775,8 +1775,8 @@ removesystrayicon(Client *i)
 void
 resize(Client *c, int x, int y, int w, int h, int bw, int interact)
 {
-	if (applysizehints(c, &x, &y, &w, &h, &bw, interact))
-		resizeclient(c, x, y, w, h, bw);
+	applysizehints(c, &x, &y, &w, &h, &bw, interact);
+	resizeclient(c, x, y, w, h, bw);
 }
 
 void
@@ -2387,6 +2387,7 @@ void
 tile(Monitor *m)
 {
 	unsigned int i, n, h, mw, my, ty, bw;
+	unsigned int gap;
 	float mfacts = 0, sfacts = 0;
 	Client *c;
 
@@ -2400,26 +2401,27 @@ tile(Monitor *m)
 		return;
 
 	bw = n == 1 ? 0 : borderpx;
+	gap = n == 1 ? 0 : m->gappx;
 
 	if (n > m->nmaster)
 		mw = m->nmaster ? m->ww * m->mfact : 0;
 	else
-		mw = m->ww - m->gappx;
-	my = ty = m->gappx;
+		mw = m->ww - gap;
+	my = ty = gap;
 	for (i = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
 		if (i < m->nmaster) {
 			h = (m->wh - my) * (c->cfact / mfacts);
-			h -= m->gappx;
-			resize(c, m->wx + m->gappx, m->wy + my, mw - 2*bw - m->gappx, h - 2*bw, bw, 0);
+			h -= gap;
+			resize(c, m->wx + gap, m->wy + my, mw - 2*bw - gap, h - 2*bw, bw, 0);
 			if (my + HEIGHT(c) < m->wh)
-				my += HEIGHT(c) + m->gappx;
+				my += HEIGHT(c) + gap;
 			mfacts -= c->cfact;
 		} else {
 			h = (m->wh - ty) * (c->cfact / sfacts);
-			h -= m->gappx;
-			resize(c, m->wx + mw + m->gappx, m->wy + ty, m->ww - mw - 2*bw - 2*m->gappx, h - 2*bw, bw, 0);
+			h -= gap;
+			resize(c, m->wx + mw + gap, m->wy + ty, m->ww - mw - 2*bw - 2*gap, h - 2*bw, bw, 0);
 			if (ty + HEIGHT(c) < m->wh)
-				ty += HEIGHT(c) + m->gappx;
+				ty += HEIGHT(c) + gap;
 			sfacts -= c->cfact;
 		}
 }
